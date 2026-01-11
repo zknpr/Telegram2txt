@@ -84,6 +84,37 @@ def get_media_size(message):
     return 0
 
 
+def get_message_filename(message):
+    """Generate a filename for the media in a message."""
+    if not message.media:
+        return None
+
+    fname = f"msg_{message.id}"
+    if isinstance(message.media, MessageMediaPhoto):
+        return fname + ".jpg"
+
+    if isinstance(message.media, MessageMediaDocument):
+        for attr in message.media.document.attributes:
+            if hasattr(attr, "file_name") and attr.file_name:
+                fname = f"msg_{message.id}_{sanitize_filename(attr.file_name)}"
+                break
+
+        if "." not in fname:
+            if hasattr(message.media.document, "mime_type"):
+                ext = mimetypes.guess_extension(message.media.document.mime_type)
+                if ext:
+                    fname += ext
+    return fname
+
+
+def resolve_chat_input(chat_input):
+    """Resolve the chat input to an ID or username."""
+    s = str(chat_input).strip()
+    if s.lstrip("-").isdigit():
+        return int(s)
+    return s
+
+
 async def download_chat(
     api_id,
     api_hash,
@@ -115,11 +146,7 @@ async def download_chat(
 
         # Resolve chat (handle ID or username)
         try:
-            # Check if input is an ID (integer or string with digits)
-            if str(chat_input).lstrip("-").isdigit():
-                chat_entity = await client.get_entity(int(chat_input))
-            else:
-                chat_entity = await client.get_entity(chat_input)
+            chat_entity = await client.get_entity(resolve_chat_input(chat_input))
 
             chat_title = getattr(
                 chat_entity, "title", getattr(chat_entity, "username", "Chat")
@@ -243,21 +270,7 @@ async def download_chat(
                         os.makedirs(media_folder, exist_ok=True)
 
                         # Generate filename
-                        fname = f"msg_{message.id}"
-                        if isinstance(message.media, MessageMediaPhoto):
-                            fname += ".jpg"
-                        elif isinstance(message.media, MessageMediaDocument):
-                            for attr in message.media.document.attributes:
-                                if hasattr(attr, "file_name") and attr.file_name:
-                                    fname = f"msg_{message.id}_{sanitize_filename(attr.file_name)}"
-                                    break
-                            if not "." in fname:
-                                # Try to guess extension from mime type
-                                if hasattr(message.media.document, "mime_type"):
-                                    ext = mimetypes.guess_extension(message.media.document.mime_type)
-                                    if ext:
-                                        fname += ext
-
+                        fname = get_message_filename(message)
                         out_path = os.path.join(media_folder, fname)
 
                         try:

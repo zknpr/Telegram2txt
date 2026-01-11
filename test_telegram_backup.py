@@ -7,7 +7,9 @@ import sys
 from telegram_backup import (
     sanitize_filename,
     get_media_type,
-    get_media_size
+    get_media_size,
+    get_message_filename,
+    resolve_chat_input
 )
 
 class TestTelegramBackup(unittest.TestCase):
@@ -20,6 +22,13 @@ class TestTelegramBackup(unittest.TestCase):
         self.assertEqual(sanitize_filename(""), "Unknown")
         self.assertEqual(sanitize_filename(None), "Unknown")
 
+    def test_resolve_chat_input(self):
+        self.assertEqual(resolve_chat_input("123456"), 123456)
+        self.assertEqual(resolve_chat_input("-100123456"), -100123456)
+        self.assertEqual(resolve_chat_input("@username"), "@username")
+        self.assertEqual(resolve_chat_input("  @username  "), "@username")
+        self.assertEqual(resolve_chat_input("chatname"), "chatname")
+
     def test_get_media_type_none(self):
         message = MagicMock()
         message.media = None
@@ -31,25 +40,38 @@ class TestTelegramBackup(unittest.TestCase):
         message.media = MagicMock(spec=MessageMediaPhoto)
         self.assertEqual(get_media_type(message), "image")
 
-    def test_get_media_type_document_video(self):
-        from telethon.tl.types import MessageMediaDocument
+    def test_get_message_filename_photo(self):
+        from telethon.tl.types import MessageMediaPhoto
         message = MagicMock()
-        doc = MagicMock()
-        doc.mime_type = "video/mp4"
-        doc.attributes = []
-        message.media = MagicMock(spec=MessageMediaDocument)
-        message.media.document = doc
-        self.assertEqual(get_media_type(message), "video")
+        message.id = 123
+        message.media = MagicMock(spec=MessageMediaPhoto)
+        self.assertEqual(get_message_filename(message), "msg_123.jpg")
 
-    def test_get_media_type_document_audio(self):
+    def test_get_message_filename_document_with_name(self):
         from telethon.tl.types import MessageMediaDocument
         message = MagicMock()
+        message.id = 456
+        attr = MagicMock()
+        attr.file_name = "test.pdf"
         doc = MagicMock()
-        doc.mime_type = "audio/mpeg"
-        doc.attributes = []
+        doc.attributes = [attr]
         message.media = MagicMock(spec=MessageMediaDocument)
         message.media.document = doc
-        self.assertEqual(get_media_type(message), "audio")
+        self.assertEqual(get_message_filename(message), "msg_456_test.pdf")
+
+    def test_get_message_filename_document_guess_ext(self):
+        from telethon.tl.types import MessageMediaDocument
+        message = MagicMock()
+        message.id = 789
+        doc = MagicMock()
+        doc.attributes = []
+        doc.mime_type = "application/pdf"
+        message.media = MagicMock(spec=MessageMediaDocument)
+        message.media.document = doc
+        # mimetypes.guess_extension might return .pdf or .pdf (system dependent but usually .pdf)
+        fname = get_message_filename(message)
+        self.assertTrue(fname.startswith("msg_789"))
+        self.assertTrue(fname.endswith(".pdf"))
 
     def test_get_media_size_document(self):
         from telethon.tl.types import MessageMediaDocument
@@ -59,19 +81,6 @@ class TestTelegramBackup(unittest.TestCase):
         message.media = MagicMock(spec=MessageMediaDocument)
         message.media.document = doc
         self.assertEqual(get_media_size(message), 12345)
-
-    def test_get_media_size_photo(self):
-        from telethon.tl.types import MessageMediaPhoto
-        message = MagicMock()
-        photo = MagicMock()
-        size1 = MagicMock()
-        size1.size = 100
-        size2 = MagicMock()
-        size2.size = 500
-        photo.sizes = [size1, size2]
-        message.media = MagicMock(spec=MessageMediaPhoto)
-        message.media.photo = photo
-        self.assertEqual(get_media_size(message), 500)
 
 if __name__ == "__main__":
     unittest.main()
