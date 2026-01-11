@@ -2,6 +2,8 @@
 
 A Python tool to backup Telegram chat history and media using the Telegram API.
 
+> **Note:** This tool was created by an LLM (Claude) based on user specifications written by Salvatore Sanfilippo.
+
 ## Features
 
 - **Forum/Topic Support:** Automatically organizes messages into topic-specific folders for Telegram Groups with Forums enabled.
